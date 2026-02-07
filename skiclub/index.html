@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkiClub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0f0f2f 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    #game-container {
+      position: relative;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 
+        0 0 60px rgba(74, 144, 226, 0.5),
+        0 0 120px rgba(0, 0, 0, 0.5),
+        inset 0 0 80px rgba(255, 255, 255, 0.1);
+      border: 3px solid rgba(74, 144, 226, 0.4);
+    }
+    
+    #canvas {
+      display: block;
+      background: linear-gradient(180deg, #1E3A5F 0%, #4A90E2 40%, #E0F6FF 100%);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="canvas" width="1000" height="800"></canvas>
+  </div>
+  
+  <script>
+    (function () {
+      const WIDTH = 1000;
+      const HEIGHT = 800;
+      
+      const SLOPE_WIDTH = 700;
+      const SLOPE_LEFT = (WIDTH - SLOPE_WIDTH) / 2;
+      const SLOPE_RIGHT = SLOPE_LEFT + SLOPE_WIDTH;
+      
+      const SKIER_SPEED = 6;
+      const JUMP_FORCE = 15;
+      const RAMP_FORCE = 25;
+      const GRAVITY = 0.6;
+      const BASE_SCROLL_SPEED = 3;
+      
+      // Checkpoints tous les 10000m (10km)
+      const CHECKPOINT_DISTANCE = 10000;
+      
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      let gameState = 'menu';
+      let lives = 3;
+      let score = 0;
+      let gatesPassed = 0;
+      let gameOver = false;
+      let gamePaused = false;
+      let checkpointReached = 0;
+      let lastCheckpointY = 0;
+      let showCheckpointMsg = false;
+      let checkpointMsgTimer = 0;
+      
+      let skier = { 
+        x: WIDTH / 2, 
+        y: HEIGHT - 150, 
+        size: 35,
+        jumping: false,
+        jumpVelocity: 0,
+        jumpY: 0,
+        groundY: HEIGHT - 150
+      };
+      
+      let camera = { y: 0 };
+      
+      let gates = [];
+      let obstacles = [];
+      let ramps = [];
+      let trees = [];
+      let particles = [];
+      let snowflakes = [];
+      
+      const keys = { left: false, right: false, jump: false };
+
+      function initGame() {
+        lives = 3;
+        score = 0;
+        gatesPassed = 0;
+        checkpointReached = 0;
+        lastCheckpointY = 0;
+        showCheckpointMsg = false;
+        camera.y = 0;
+        skier.x = WIDTH / 2;
+        skier.jumping = false;
+        skier.jumpY = 0;
+        skier.jumpVelocity = 0;
+        
+        gates = [];
+        obstacles = [];
+        ramps = [];
+        trees = [];
+        particles = [];
+        gameOver = false;
+        gamePaused = false;
+        
+        initWorld();
+        initSnow();
+      }
+
+      function initWorld() {
+        // Générer un circuit très long avec portes très espacées
+        let currentY = -200;
+        const TOTAL_SECTIONS = 100;
+        const SECTION_SPACING = 500; // 100 * 500 = 50000m = 50km avec portes très espacées
+        
+        // Arbres sur les côtés
+        for (let i = 0; i < 150; i++) {
+          trees.push({
+            x: Math.random() < 0.5 
+              ? SLOPE_LEFT - 50 - Math.random() * 100 
+              : SLOPE_RIGHT + 50 + Math.random() * 100,
+            y: currentY - i * 80,
+            size: 40 + Math.random() * 30
+          });
+        }
+        
+        const obstacleTypes = ['rock', 'mogul', 'ice'];
+        
+        for (let i = 0; i < TOTAL_SECTIONS; i++) {
+          const y = currentY - i * SECTION_SPACING;
+          const side = i % 2 === 0 ? 'left' : 'right';
+          
+          // Porte
+          const gateX = side === 'left' 
+            ? SLOPE_LEFT + 150 + Math.random() * 100
+            : SLOPE_RIGHT - 250 - Math.random() * 100;
+          
+          gates.push({
+            x: gateX,
+            y: y,
+            width: 240,
+            height: 10,
+            color: side === 'left' ? '#FF4444' : '#4488FF',
+            passed: false
+          });
+          
+          // Obstacle éloigné des portes (300m avant ou après)
+          if (i > 0 && i % 3 === 0) {
+            const obsType = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+            // Position alternée pour laisser de l'espace
+            const obsSide = side === 'left' ? 'right' : 'left';
+            const obsX = obsSide === 'left' 
+              ? SLOPE_LEFT + 180 + Math.random() * 80
+              : SLOPE_RIGHT - 260 - Math.random() * 80;
+            
+            obstacles.push({
+              x: obsX,
+              y: y - 300, // 300m avant la porte
+              type: obsType,
+              width: 35,
+              height: 25,
+              hit: false
+            });
+          }
+          
+          // Tremplin entre deux portes (1 tous les 3 portes environ)
+          // Pour éviter de sauter par-dessus une porte
+          if (i > 0 && i % 3 === 0) {
+            const rampX = WIDTH / 2 + (Math.random() - 0.5) * 300;
+            ramps.push({
+              x: rampX,
+              y: y + 250, // 250m APRÈS la porte (milieu entre deux portes)
+              width: 70,
+              height: 35,
+              used: false
+            });
+          }
+          
+          // Arbres-obstacles sur la piste (1 tous les 2 portes)
+          if (i > 0 && i % 2 === 0) {
+            const treeObsX = WIDTH / 2 + (Math.random() - 0.5) * 400;
+            obstacles.push({
+              x: treeObsX,
+              y: y + 400, // 400m après la porte
+              type: 'tree',
+              width: 50,
+              height: 60,
+              hit: false
+            });
+          }
+        }
+      }
+
+      function initSnow() {
+        snowflakes = [];
+        for (let i = 0; i < 300; i++) {
+          snowflakes.push({
+            x: Math.random() * WIDTH,
+            y: Math.random() * HEIGHT,
+            size: Math.random() * 3 + 1,
+            speed: Math.random() * 2 + 0.5,
+            opacity: Math.random() * 0.6 + 0.2,
+            wobble: Math.random() * Math.PI * 2
+          });
+        }
+      }
+
+      function respawnAtCheckpoint() {
+        camera.y = lastCheckpointY;
+        skier.x = WIDTH / 2;
+        skier.jumping = false;
+        skier.jumpY = 0;
+        skier.jumpVelocity = 0;
+        
+        obstacles.forEach(obs => {
+          const obsDist = Math.abs(obs.y - camera.y);
+          if (obsDist < 500) {
+            obs.hit = false;
+          }
+        });
+        
+        ramps.forEach(ramp => {
+          const rampDist = Math.abs(ramp.y - camera.y);
+          if (rampDist < 500) {
+            ramp.used = false;
+          }
+        });
+      }
+
+      function update() {
+        if (gameState !== 'play' || gameOver || gamePaused) return;
+
+        if (keys.left && skier.x > SLOPE_LEFT + 30) skier.x -= SKIER_SPEED;
+        if (keys.right && skier.x < SLOPE_RIGHT - 30) skier.x += SKIER_SPEED;
+        
+        if (keys.jump && !skier.jumping) {
+          skier.jumping = true;
+          skier.jumpVelocity = JUMP_FORCE;
+        }
+        
+        if (skier.jumping) {
+          skier.jumpY -= skier.jumpVelocity;
+          skier.jumpVelocity -= GRAVITY;
+          
+          if (skier.jumpY >= 0) {
+            skier.jumping = false;
+            skier.jumpY = 0;
+            skier.jumpVelocity = 0;
+            createParticles(skier.x, skier.groundY, '#FFFFFF');
+          }
+        }
+
+        let scrollSpeed = BASE_SCROLL_SPEED + Math.min(gatesPassed / 30, 2);
+        camera.y -= scrollSpeed;
+        score += Math.floor(scrollSpeed);
+
+        // Vérifier les checkpoints (tous les 5km)
+        const distance = Math.abs(camera.y);
+        const nextCheckpoint = (checkpointReached + 1) * CHECKPOINT_DISTANCE;
+        
+        if (distance > nextCheckpoint) {
+          checkpointReached++;
+          lastCheckpointY = camera.y;
+          showCheckpointMsg = true;
+          checkpointMsgTimer = 120; // 2 secondes seulement
+          score += 3000;
+          lives = Math.min(lives + 1, 5);
+        }
+
+        if (showCheckpointMsg && checkpointMsgTimer > 0) {
+          checkpointMsgTimer--;
+          if (checkpointMsgTimer <= 0) showCheckpointMsg = false;
+        }
+
+        snowflakes.forEach(flake => {
+          flake.y += flake.speed;
+          flake.wobble += 0.05;
+          flake.x += Math.sin(flake.wobble) * 0.3;
+          if (flake.y > HEIGHT) {
+            flake.y = -10;
+            flake.x = Math.random() * WIDTH;
+          }
+        });
+
+        ramps.forEach(ramp => {
+          const rampScreenY = ramp.y - camera.y;
+          
+          if (!ramp.used && 
+              rampScreenY > skier.groundY - 40 && 
+              rampScreenY < skier.groundY + 20 &&
+              skier.x > ramp.x - ramp.width/2 && 
+              skier.x < ramp.x + ramp.width/2) {
+            
+            ramp.used = true;
+            skier.jumping = true;
+            skier.jumpVelocity = RAMP_FORCE;
+            
+            for (let i = 0; i < 30; i++) {
+              particles.push({
+                x: skier.x + (Math.random() - 0.5) * 40,
+                y: skier.groundY,
+                vx: (Math.random() - 0.5) * 10,
+                vy: Math.random() * 5 + 2,
+                life: 1,
+                color: '#FFD700',
+                size: Math.random() * 6 + 3
+              });
+            }
+          }
+          
+          if (rampScreenY > HEIGHT + 200) {
+            ramp.used = false;
+          }
+        });
+
+        gates.forEach(gate => {
+          const gateScreenY = gate.y - camera.y;
+          
+          if (!gate.passed && 
+              gateScreenY > skier.groundY - 40 && 
+              gateScreenY < skier.groundY + 40) {
+            const gateLeft = gate.x;
+            const gateRight = gate.x + gate.width;
+            
+            if (skier.x >= gateLeft && skier.x <= gateRight) {
+              gate.passed = true;
+              gatesPassed++;
+              score += 500;
+              createParticles(skier.x, skier.groundY + skier.jumpY, gate.color);
+            }
+          }
+        });
+
+        obstacles.forEach(obs => {
+          const obsScreenY = obs.y - camera.y;
+          
+          if (!obs.hit && !skier.jumping &&
+              obsScreenY > skier.groundY - 40 && 
+              obsScreenY < skier.groundY + 10 &&
+              skier.x > obs.x - obs.width/2 && 
+              skier.x < obs.x + obs.width/2) {
+            
+            obs.hit = true;
+            lives--;
+            createExplosion(skier.x, skier.groundY, '#FF6B6B');
+            
+            if (lives <= 0) {
+              gameOver = true;
+            } else {
+              setTimeout(() => {
+                if (!gameOver) respawnAtCheckpoint();
+              }, 1000);
+            }
+          }
+          
+          if (obsScreenY > HEIGHT + 200) {
+            obs.hit = false;
+          }
+        });
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          let p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 0.02;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+      }
+
+      function createParticles(x, y, color) {
+        for (let i = 0; i < 12; i++) {
+          particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 1,
+            color: color,
+            size: Math.random() * 5 + 2
+          });
+        }
+      }
+
+      function createExplosion(x, y, color) {
+        for (let i = 0; i < 25; i++) {
+          particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 12,
+            vy: (Math.random() - 0.5) * 12,
+            life: 1,
+            color: color,
+            size: Math.random() * 8 + 4
+          });
+        }
+      }
+
+      function draw() {
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+        skyGrad.addColorStop(0, '#0d1f33');
+        skyGrad.addColorStop(0.3, '#1a3a5c');
+        skyGrad.addColorStop(0.6, '#4A90E2');
+        skyGrad.addColorStop(0.9, '#87CEEB');
+        skyGrad.addColorStop(1, '#E0F6FF');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        drawMountains();
+        drawSlope();
+
+        trees.forEach(tree => {
+          const screenY = tree.y - camera.y;
+          if (screenY > -100 && screenY < HEIGHT + 100) {
+            drawTree(tree.x, screenY, tree.size);
+          }
+        });
+
+        snowflakes.forEach(flake => {
+          ctx.fillStyle = `rgba(255, 255, 255, ${flake.opacity})`;
+          ctx.beginPath();
+          ctx.arc(flake.x, flake.y, flake.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ramps.forEach(ramp => {
+          const screenY = ramp.y - camera.y;
+          if (screenY > -100 && screenY < HEIGHT + 100) {
+            drawRamp(ramp.x, screenY, ramp.width, ramp.used);
+          }
+        });
+
+        gates.forEach(gate => {
+          const screenY = gate.y - camera.y;
+          if (screenY > -100 && screenY < HEIGHT + 100) {
+            drawGate(gate.x, screenY, gate.width, gate.color);
+          }
+        });
+
+        obstacles.forEach(obs => {
+          const screenY = obs.y - camera.y;
+          if (screenY > -100 && screenY < HEIGHT + 100) {
+            drawObstacle(obs.x, screenY, obs.type, obs.width, obs.height);
+          }
+        });
+
+        if (!gameOver) {
+          drawSkier();
+        }
+
+        particles.forEach(p => {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size || 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+
+        drawUI();
+        
+        if (showCheckpointMsg) {
+          drawCheckpointMessage();
+        }
+
+        if (gameState === 'menu') {
+          drawMenu();
+        }
+
+        if (gameOver) {
+          drawGameOver();
+        }
+
+        if (gamePaused) {
+          drawPause();
+        }
+      }
+
+      function drawMountains() {
+        const grad1 = ctx.createLinearGradient(0, 0, 0, HEIGHT * 0.6);
+        grad1.addColorStop(0, '#1a3a5c');
+        grad1.addColorStop(1, 'rgba(26, 58, 92, 0)');
+        ctx.fillStyle = grad1;
+        ctx.beginPath();
+        ctx.moveTo(0, HEIGHT * 0.5);
+        ctx.lineTo(WIDTH * 0.2, HEIGHT * 0.2);
+        ctx.lineTo(WIDTH * 0.5, HEIGHT * 0.4);
+        ctx.lineTo(WIDTH * 0.8, HEIGHT * 0.15);
+        ctx.lineTo(WIDTH, HEIGHT * 0.45);
+        ctx.lineTo(WIDTH, HEIGHT);
+        ctx.lineTo(0, HEIGHT);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(WIDTH * 0.15, HEIGHT * 0.25);
+        ctx.lineTo(WIDTH * 0.2, HEIGHT * 0.2);
+        ctx.lineTo(WIDTH * 0.25, HEIGHT * 0.26);
+        ctx.lineTo(WIDTH * 0.75, HEIGHT * 0.2);
+        ctx.lineTo(WIDTH * 0.8, HEIGHT * 0.15);
+        ctx.lineTo(WIDTH * 0.85, HEIGHT * 0.22);
+        ctx.fill();
+      }
+
+      function drawSlope() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.beginPath();
+        ctx.moveTo(SLOPE_LEFT + 20, HEIGHT);
+        ctx.lineTo(SLOPE_LEFT - 20, 0);
+        ctx.lineTo(SLOPE_RIGHT + 20, 0);
+        ctx.lineTo(SLOPE_RIGHT - 20, HEIGHT);
+        ctx.fill();
+        
+        const slopeGrad = ctx.createLinearGradient(SLOPE_LEFT, 0, SLOPE_RIGHT, 0);
+        slopeGrad.addColorStop(0, '#e8f4f8');
+        slopeGrad.addColorStop(0.5, '#ffffff');
+        slopeGrad.addColorStop(1, '#e8f4f8');
+        
+        ctx.fillStyle = slopeGrad;
+        ctx.fillRect(SLOPE_LEFT, 0, SLOPE_WIDTH, HEIGHT);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([30, 20]);
+        
+        ctx.beginPath();
+        ctx.moveTo(SLOPE_LEFT, HEIGHT);
+        ctx.lineTo(SLOPE_LEFT, 0);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(SLOPE_RIGHT, HEIGHT);
+        ctx.lineTo(SLOPE_RIGHT, 0);
+        ctx.stroke();
+        
+        ctx.setLineDash([]);
+      }
+
+      function drawTree(x, y, size) {
+        const scale = Math.min(1, (y + 200) / 400);
+        const s = size * scale;
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + s * 0.3, s * 0.4, s * 0.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#3d2817';
+        ctx.fillRect(x - s * 0.08, y, s * 0.16, s * 0.35);
+        
+        const treeGrad = ctx.createLinearGradient(x - s * 0.4, y - s * 0.6, x + s * 0.4, y);
+        treeGrad.addColorStop(0, '#1a4a1a');
+        treeGrad.addColorStop(1, '#0d3d0d');
+        ctx.fillStyle = treeGrad;
+        
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.4, y + s * 0.2);
+        ctx.lineTo(x, y - s * 0.5);
+        ctx.lineTo(x + s * 0.4, y + s * 0.2);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.3, y - s * 0.1);
+        ctx.lineTo(x, y - s * 0.6);
+        ctx.lineTo(x + s * 0.3, y - s * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.15, y - s * 0.4);
+        ctx.lineTo(x, y - s * 0.6);
+        ctx.lineTo(x + s * 0.15, y - s * 0.4);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawRamp(x, y, w, used) {
+        const rampGrad = ctx.createLinearGradient(x - w/2, y, x + w/2, y - 40);
+        if (used) {
+          rampGrad.addColorStop(0, '#888');
+          rampGrad.addColorStop(1, '#666');
+        } else {
+          rampGrad.addColorStop(0, '#FFA500');
+          rampGrad.addColorStop(0.5, '#FF8C00');
+          rampGrad.addColorStop(1, '#FF6B35');
+        }
+        ctx.fillStyle = rampGrad;
+        
+        ctx.beginPath();
+        ctx.moveTo(x - w/2, y + 15);
+        ctx.lineTo(x - w/2, y);
+        ctx.quadraticCurveTo(x, y - 45, x + w/2, y);
+        ctx.lineTo(x + w/2, y + 15);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.moveTo(x - w/2 + 5, y);
+        ctx.quadraticCurveTo(x, y - 40, x + w/2 - 5, y);
+        ctx.lineTo(x + w/2 - 10, y - 5);
+        ctx.quadraticCurveTo(x, y - 35, x - w/2 + 10, y - 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        if (!used) {
+          ctx.fillStyle = '#FFD700';
+          ctx.font = 'bold 12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('▲', x, y - 50);
+        }
+      }
+
+      function drawObstacle(x, y, type, w, h) {
+        if (type === 'rock') {
+          const rockGrad = ctx.createRadialGradient(x - 10, y - 10, 0, x, y, w);
+          rockGrad.addColorStop(0, '#999');
+          rockGrad.addColorStop(1, '#444');
+          ctx.fillStyle = rockGrad;
+          
+          ctx.beginPath();
+          ctx.moveTo(x - w/2, y + h/3);
+          ctx.quadraticCurveTo(x - w/4, y - h/2, x, y - h/2);
+          ctx.quadraticCurveTo(x + w/4, y - h/2, x + w/2, y + h/3);
+          ctx.closePath();
+          ctx.fill();
+          
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.beginPath();
+          ctx.moveTo(x - w/5, y - h/4);
+          ctx.lineTo(x, y - h/2.5);
+          ctx.lineTo(x + w/5, y - h/4);
+          ctx.lineTo(x, y - h/3);
+          ctx.closePath();
+          ctx.fill();
+          
+        } else if (type === 'ice') {
+          const iceGrad = ctx.createRadialGradient(x, y, 0, x, y, w);
+          iceGrad.addColorStop(0, 'rgba(150, 200, 255, 0.5)');
+          iceGrad.addColorStop(1, 'rgba(74, 144, 226, 0.3)');
+          ctx.fillStyle = iceGrad;
+          
+          ctx.beginPath();
+          ctx.ellipse(x, y, w/2, h/2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.beginPath();
+          ctx.ellipse(x - w/4, y - h/4, w/6, h/8, -0.5, 0, Math.PI * 2);
+          ctx.fill();
+          
+        } else if (type === 'tree') {
+          // Arbre-obstacle sur la piste
+          const s = w; // taille basée sur width
+          
+          // Ombre
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+          ctx.beginPath();
+          ctx.ellipse(x, y + s * 0.3, s * 0.4, s * 0.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Tronc
+          ctx.fillStyle = '#3d2817';
+          ctx.fillRect(x - s * 0.08, y, s * 0.16, s * 0.35);
+          
+          // Sapin
+          const treeGrad = ctx.createLinearGradient(x - s * 0.4, y - s * 0.6, x + s * 0.4, y);
+          treeGrad.addColorStop(0, '#1a4a1a');
+          treeGrad.addColorStop(1, '#0d3d0d');
+          ctx.fillStyle = treeGrad;
+          
+          ctx.beginPath();
+          ctx.moveTo(x - s * 0.4, y + s * 0.2);
+          ctx.lineTo(x, y - s * 0.5);
+          ctx.lineTo(x + s * 0.4, y + s * 0.2);
+          ctx.closePath();
+          ctx.fill();
+          
+          ctx.beginPath();
+          ctx.moveTo(x - s * 0.3, y - s * 0.1);
+          ctx.lineTo(x, y - s * 0.6);
+          ctx.lineTo(x + s * 0.3, y - s * 0.1);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Neige sur les branches
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.beginPath();
+          ctx.moveTo(x - s * 0.15, y - s * 0.4);
+          ctx.lineTo(x, y - s * 0.6);
+          ctx.lineTo(x + s * 0.15, y - s * 0.4);
+          ctx.closePath();
+          ctx.fill();
+          
+        } else {
+          const mogulGrad = ctx.createRadialGradient(x, y - h/3, 0, x, y, w);
+          mogulGrad.addColorStop(0, '#ffffff');
+          mogulGrad.addColorStop(1, '#c8d4e0');
+          ctx.fillStyle = mogulGrad;
+          
+          ctx.beginPath();
+          ctx.ellipse(x, y, w/1.5, h/1.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawGate(x, y, w, color) {
+        const h = 80;
+        
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - h);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(x + w, y);
+        ctx.lineTo(x + w, y - h);
+        ctx.stroke();
+        
+        const flagGrad = ctx.createLinearGradient(x, y - h, x + w, y);
+        flagGrad.addColorStop(0, color);
+        flagGrad.addColorStop(1, color === '#FF4444' ? '#FF8888' : '#88AAFF');
+        ctx.fillStyle = flagGrad;
+        
+        ctx.beginPath();
+        ctx.moveTo(x, y - h * 0.85);
+        ctx.quadraticCurveTo(x + w/2, y - h * 0.65, x + w, y - h * 0.65);
+        ctx.quadraticCurveTo(x + w/2, y - h * 0.55, x, y - h * 0.45);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      function drawSkier() {
+        const x = skier.x;
+        const y = skier.groundY + skier.jumpY;
+        
+        const shadowScale = skier.jumping ? 0.5 : 1;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(x, skier.groundY + 30, 25 * shadowScale, 8 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        const skiGrad = ctx.createLinearGradient(x - 18, y + 20, x + 18, y + 20);
+        skiGrad.addColorStop(0, '#FF8C42');
+        skiGrad.addColorStop(1, '#E55A00');
+        ctx.fillStyle = skiGrad;
+        ctx.fillRect(x - 18, y + 20, 12, 35);
+        ctx.fillRect(x + 6, y + 20, 12, 35);
+        
+        const bodyGrad = ctx.createLinearGradient(x - 15, y - 25, x + 15, y + 25);
+        bodyGrad.addColorStop(0, '#2196F3');
+        bodyGrad.addColorStop(1, '#0D47A1');
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.ellipse(x, y, 16, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#FFCCBC';
+        ctx.beginPath();
+        ctx.arc(x, y - 28, 14, 0, Math.PI * 2);
+        ctx.fill();
+        
+        const helmetGrad = ctx.createLinearGradient(x - 14, y - 45, x + 14, y - 35);
+        helmetGrad.addColorStop(0, '#FF5252');
+        helmetGrad.addColorStop(1, '#D32F2F');
+        ctx.fillStyle = helmetGrad;
+        ctx.beginPath();
+        ctx.arc(x, y - 32, 15, Math.PI, 0);
+        ctx.fill();
+        
+        ctx.fillStyle = '#333';
+        ctx.fillRect(x - 12, y - 35, 24, 8);
+        const glassGrad = ctx.createLinearGradient(x - 10, y - 35, x + 10, y - 32);
+        glassGrad.addColorStop(0, '#81D4FA');
+        glassGrad.addColorStop(1, '#4FC3F7');
+        ctx.fillStyle = glassGrad;
+        ctx.fillRect(x - 10, y - 34, 20, 4);
+        
+        const scarfGrad = ctx.createLinearGradient(x - 14, y - 15, x + 14, y - 8);
+        scarfGrad.addColorStop(0, '#FFD54F');
+        scarfGrad.addColorStop(1, '#FFB300');
+        ctx.fillStyle = scarfGrad;
+        ctx.fillRect(x - 14, y - 12, 28, 8);
+        
+        const time = Date.now() * 0.01;
+        ctx.beginPath();
+        ctx.moveTo(x + 14, y - 8);
+        ctx.quadraticCurveTo(x + 28 + Math.sin(time) * 5, y - 5, x + 35 + Math.sin(time + 1) * 4, y + 5);
+        ctx.quadraticCurveTo(x + 28 + Math.sin(time) * 5, y + 8, x + 12, y + 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = '#1976D2';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - 14, y - 10);
+        ctx.lineTo(x - 28, y + 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + 14, y - 10);
+        ctx.lineTo(x + 28, y + 15);
+        ctx.stroke();
+        
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x - 28, y + 15);
+        ctx.lineTo(x - 34, y + 40);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + 28, y + 15);
+        ctx.lineTo(x + 34, y + 40);
+        ctx.stroke();
+        
+        if (skier.jumping) {
+          ctx.fillStyle = '#FFD700';
+          ctx.font = 'bold 24px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('★', x, y - 65);
+        }
+      }
+
+      function drawUI() {
+        // UI plus compacte en haut
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(15, 15, 200, 100);
+        ctx.fillRect(WIDTH - 215, 15, 200, 100);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(15, 15, 200, 100);
+        ctx.strokeRect(WIDTH - 215, 15, 200, 100);
+        
+        // Vies
+        ctx.font = 'bold 26px Arial';
+        ctx.textAlign = 'left';
+        let hearts = '';
+        for (let i = 0; i < lives; i++) hearts += '❤️';
+        ctx.fillStyle = '#FF6B6B';
+        ctx.fillText(hearts, 28, 50);
+        
+        // Distance
+        const distance = Math.abs(Math.floor(camera.y / 100));
+        const totalDistance = 50000; // 50km = 50000m
+        const progress = Math.min((distance / totalDistance) * 100, 100);
+        
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(distance + 'm / ' + totalDistance + 'm', 28, 75);
+        
+        // Barre de progression fine
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(28, 82, 174, 8);
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(28, 82, 174 * (progress / 100), 8);
+        
+        // Checkpoint discret
+        if (checkpointReached > 0) {
+          ctx.font = 'bold 12px Arial';
+          ctx.fillStyle = '#4CAF50';
+          ctx.fillText('🏁 CP' + checkpointReached, 28, 102);
+        }
+        
+        // Score
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText(score.toLocaleString(), WIDTH - 28, 55);
+        
+        // Portes
+        ctx.font = 'bold 20px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(gatesPassed + '/100', WIDTH - 28, 85);
+        
+        // Tremplins
+        const rampsUsed = ramps.filter(r => r.used).length;
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = '#FF8C00';
+        ctx.fillText('▲ ' + rampsUsed, WIDTH - 28, 105);
+      }
+
+      function drawCheckpointMessage() {
+        // Message discret en coin
+        const alpha = checkpointMsgTimer / 120;
+        
+        ctx.fillStyle = `rgba(76, 175, 80, ${alpha * 0.9})`;
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('🏁 Checkpoint ' + checkpointReached + ' ! +' + 3000, 20, HEIGHT - 30);
+        
+        // Petite barre de vie ajoutée
+        ctx.fillStyle = `rgba(255, 107, 107, ${alpha})`;
+        ctx.fillText('❤️ +1', 20, HEIGHT - 50);
+      }
+
+      function drawMenu() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        
+        ctx.fillStyle = '#4A90E2';
+        ctx.font = 'bold 80px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#4A90E2';
+        ctx.shadowBlur = 30;
+        ctx.fillText('⛷️ SKICLUB', WIDTH / 2, HEIGHT / 2 - 140);
+        ctx.shadowBlur = 0;
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '36px Arial';
+        ctx.fillText('Descente de 50km', WIDTH / 2, HEIGHT / 2 - 70);
+        
+        ctx.fillStyle = '#aaa';
+        ctx.font = '24px Arial';
+        ctx.fillText('← → Déplacer', WIDTH / 2, HEIGHT / 2 + 10);
+        ctx.fillText('ESPACE pour SAUTER', WIDTH / 2, HEIGHT / 2 + 45);
+        ctx.fillText('▲ Tremplins pour sauter plus haut', WIDTH / 2, HEIGHT / 2 + 80);
+        ctx.fillText('❤️❤️❤️ 3 vies • 🏁 CP tous les 10km', WIDTH / 2, HEIGHT / 2 + 115);
+        
+        ctx.fillStyle = '#4A90E2';
+        ctx.font = 'bold 28px Arial';
+        ctx.fillText('ESPACE pour commencer', WIDTH / 2, HEIGHT / 2 + 190);
+      }
+
+      function drawGameOver() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        
+        ctx.fillStyle = '#FF6B6B';
+        ctx.font = 'bold 90px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', WIDTH / 2, HEIGHT / 2 - 100);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '40px Arial';
+        ctx.fillText('Score: ' + score.toLocaleString(), WIDTH / 2, HEIGHT / 2 - 20);
+        ctx.fillText('Portes: ' + gatesPassed + '/100', WIDTH / 2, HEIGHT / 2 + 35);
+        ctx.fillText('Distance: ' + Math.abs(Math.floor(camera.y / 100)) + 'm', WIDTH / 2, HEIGHT / 2 + 85);
+        ctx.fillText('Checkpoints: ' + checkpointReached, WIDTH / 2, HEIGHT / 2 + 135);
+        
+        ctx.fillStyle = '#4A90E2';
+        ctx.font = '28px Arial';
+        ctx.fillText('R pour recommencer', WIDTH / 2, HEIGHT / 2 + 200);
+      }
+
+      function drawPause() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 90px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSE', WIDTH / 2, HEIGHT / 2 - 20);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillText('P pour reprendre', WIDTH / 2, HEIGHT / 2 + 60);
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      document.addEventListener('keydown', function (e) {
+        if (gameState === 'menu') {
+          if (e.key === ' ') {
+            e.preventDefault();
+            gameState = 'play';
+            initGame();
+          }
+          return;
+        }
+        
+        if (e.key === 'p' || e.key === 'P') {
+          if (gameState === 'play' && !gameOver) {
+            gamePaused = !gamePaused;
+            e.preventDefault();
+          }
+        }
+        
+        if (e.key === 'ArrowLeft') { keys.left = true; e.preventDefault(); }
+        if (e.key === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+        if (e.key === ' ') { keys.jump = true; e.preventDefault(); }
+        
+        if (gameOver && (e.key === 'r' || e.key === 'R')) {
+          e.preventDefault();
+          gameState = 'menu';
+          initGame();
+        }
+      });
+
+      document.addEventListener('keyup', function (e) {
+        if (e.key === 'ArrowLeft') keys.left = false;
+        if (e.key === 'ArrowRight') keys.right = false;
+        if (e.key === ' ') keys.jump = false;
+      });
+
+      initSnow();
+      loop();
+    })();
+  </script>
+</body>
+</html>
