@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air Hockey - Hyper Réaliste</title>
+  <style>
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+    
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f4b 50%, #0a0e27 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+    }
+    
+    #game-container {
+      position: relative;
+      border-radius: 20px;
+      box-shadow: 
+        0 0 80px rgba(0, 200, 255, 0.4),
+        0 0 150px rgba(0, 0, 0, 0.6),
+        inset 0 0 100px rgba(255, 255, 255, 0.05);
+      border: 4px solid rgba(0, 200, 255, 0.3);
+      overflow: hidden;
+    }
+    
+    #canvas {
+      display: block;
+      background: linear-gradient(180deg, #0d1428 0%, #1a2542 50%, #0d1428 100%);
+    }
+    
+    .ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 60px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    
+    .score-display {
+      text-align: center;
+      color: white;
+    }
+    
+    .score-display.player1 { text-shadow: 0 0 20px #00d4ff; }
+    .score-display.player2 { text-shadow: 0 0 20px #ff2d95; }
+    
+    .score-display .name {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+    
+    .score-display .score {
+      font-size: 48px;
+      font-weight: 900;
+    }
+    
+    .score-display.player1 .score { color: #00d4ff; }
+    .score-display.player2 .score { color: #ff2d95; }
+    
+    #menu-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 39, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    
+    #menu-overlay h1 {
+      font-size: 56px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #00d4ff, #ff2d95);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      text-shadow: 0 0 60px rgba(0, 212, 255, 0.5);
+    }
+    
+    #menu-overlay .subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 18px;
+      margin-bottom: 50px;
+      letter-spacing: 4px;
+    }
+    
+    .mode-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .mode-btn {
+      padding: 20px 50px;
+      font-size: 20px;
+      font-weight: 600;
+      border: 2px solid;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: transparent;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+    
+    .mode-btn.solo {
+      color: #00d4ff;
+      border-color: #00d4ff;
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+    }
+    
+    .mode-btn.solo:hover {
+      background: #00d4ff;
+      color: #0a0e27;
+      box-shadow: 0 0 50px rgba(0, 212, 255, 0.6);
+      transform: scale(1.05);
+    }
+    
+    .mode-btn.duo {
+      color: #ff2d95;
+      border-color: #ff2d95;
+      box-shadow: 0 0 30px rgba(255, 45, 149, 0.3);
+    }
+    
+    .mode-btn.duo:hover {
+      background: #ff2d95;
+      color: #0a0e27;
+      box-shadow: 0 0 50px rgba(255, 45, 149, 0.6);
+      transform: scale(1.05);
+    }
+    
+    .controls-info {
+      margin-top: 50px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.8;
+    }
+    
+    .controls-info strong {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    #game-over-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 39, 0.95);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    
+    #game-over-overlay h2 {
+      font-size: 48px;
+      font-weight: 900;
+      color: white;
+      margin-bottom: 20px;
+    }
+    
+    #game-over-overlay .winner-text {
+      font-size: 24px;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 40px;
+    }
+    
+    .restart-btn {
+      padding: 15px 40px;
+      font-size: 18px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #00d4ff, #ff2d95);
+      border: none;
+      border-radius: 50px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    
+    .restart-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 40px rgba(0, 212, 255, 0.5);
+    }
+    
+    #pause-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 39, 0.8);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(5px);
+    }
+    
+    #pause-overlay h2 {
+      font-size: 42px;
+      font-weight: 900;
+      color: white;
+      margin-bottom: 20px;
+    }
+    
+    #pause-overlay p {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 16px;
+    }
+    
+    .ai-level-selector {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .ai-level-btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      background: transparent;
+      border: 1px solid rgba(0, 212, 255, 0.5);
+      border-radius: 25px;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .ai-level-btn:hover,
+    .ai-level-btn.active {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="canvas" width="900" height="1600"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="score-display player1">
+        <div class="name">Joueur 1</div>
+        <div class="score" id="score1">0</div>
+      </div>
+      <div class="score-display player2">
+        <div class="name" id="player2-name">Joueur 2</div>
+        <div class="score" id="score2">0</div>
+      </div>
+    </div>
+    
+    <div id="menu-overlay">
+      <h1>🏒 AIR HOCKEY</h1>
+      <div class="subtitle">HYPER RÉALISTE</div>
+      
+      <div class="mode-buttons">
+        <button class="mode-btn solo" onclick="startGame('solo')">🤖 Solo vs IA</button>
+        <button class="mode-btn duo" onclick="startGame('duo')">👥 2 Joueurs</button>
+      </div>
+      
+      <div class="ai-level-selector" id="ai-selector" style="display: none;">
+        <button class="ai-level-btn active" onclick="setAILevel('easy')">Facile</button>
+        <button class="ai-level-btn" onclick="setAILevel('medium')">Moyen</button>
+        <button class="ai-level-btn" onclick="setAILevel('hard')">Difficile</button>
+      </div>
+      
+      <div class="controls-info">
+        <strong>🖱️ SOURIS</strong> ou <strong>👆 TACTILE</strong> : Déplacer le maillet<br>
+        <strong>⌨️ CLAVIER</strong> : Joueur 1 (WASD) • Joueur 2 (Flèches)<br>
+        <strong>P</strong> : Pause • Premier à 7 points gagne
+      </div>
+    </div>
+    
+    <div id="game-over-overlay">
+      <h2 id="winner-title">VICTOIRE !</h2>
+      <div class="winner-text" id="winner-message">Joueur 1 gagne !</div>
+      <button class="restart-btn" onclick="showMenu()">🔄 Rejouer</button>
+    </div>
+    
+    <div id="pause-overlay">
+      <h2>PAUSE</h2>
+      <p>Appuyez sur P pour reprendre</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Dimensions de la table
+    const TABLE_WIDTH = canvas.width;
+    const TABLE_HEIGHT = canvas.height;
+    const TABLE_MARGIN = 40;
+    const GOAL_WIDTH = 220;
+    const GOAL_DEPTH = 30;
+    
+    // Physique
+    const PUCK_RADIUS = 22;
+    const MALLET_RADIUS = 45;
+    const MAX_PUCK_SPEED = 45;
+    const MAX_MALLET_SPEED = 35;
+    const FRICTION = 0.985;
+    const RESTITUTION = 0.92;
+    const MALLET_RESTITUTION = 0.85;
+    
+    // État du jeu
+    let gameState = 'menu'; // menu, playing, paused, gameover
+    let gameMode = 'solo'; // solo, duo
+    let aiLevel = 'medium';
+    let winningScore = 7;
+    
+    // Scores
+    let score1 = 0;
+    let score2 = 0;
+    
+    // Entités
+    let puck = {
+      x: TABLE_WIDTH / 2,
+      y: TABLE_HEIGHT / 2,
+      vx: 0,
+      vy: 0,
+      radius: PUCK_RADIUS,
+      lastX: TABLE_WIDTH / 2,
+      lastY: TABLE_HEIGHT / 2
+    };
+    
+    let mallet1 = {
+      x: TABLE_WIDTH / 2,
+      y: TABLE_HEIGHT - 180,
+      vx: 0,
+      vy: 0,
+      radius: MALLET_RADIUS,
+      lastX: TABLE_WIDTH / 2,
+      lastY: TABLE_HEIGHT - 180,
+      isDragging: false
+    };
+    
+    let mallet2 = {
+      x: TABLE_WIDTH / 2,
+      y: 180,
+      vx: 0,
+      vy: 0,
+      radius: MALLET_RADIUS,
+      lastX: TABLE_WIDTH / 2,
+      lastY: 180,
+      isDragging: false
+    };
+    
+    // Contrôles
+    const keys = {
+      w: false, a: false, s: false, d: false,
+      ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
+    };
+    
+    let mousePos = { x: 0, y: 0 };
+    let touchPos = { x: 0, y: 0 };
+    
+    // Particules
+    let particles = [];
+    let sparks = [];
+    
+    // Éclairage
+    let lightFlicker = 0;
+    
+    // AI
+    let aiState = {
+      reactionTime: 0,
+      targetX: TABLE_WIDTH / 2,
+      targetY: 180,
+      confusion: 0
+    };
+    
+    // Sons (simulation visuelle)
+    let impactIntensity = 0;
+    
+    function initGame() {
+      resetPositions();
+      score1 = 0;
+      score2 = 0;
+      updateScoreDisplay();
+      particles = [];
+      sparks = [];
+      
+      // Configurer l'IA selon le niveau
+      if (gameMode === 'solo') {
+        document.getElementById('player2-name').textContent = 'Ordinateur';
+        configureAI();
+      } else {
+        document.getElementById('player2-name').textContent = 'Joueur 2';
+      }
+    }
+    
+    function configureAI() {
+      switch(aiLevel) {
+        case 'easy':
+          aiState.reactionTime = 12;
+          aiState.confusion = 0.3;
+          break;
+        case 'medium':
+          aiState.reactionTime = 8;
+          aiState.confusion = 0.15;
+          break;
+        case 'hard':
+          aiState.reactionTime = 4;
+          aiState.confusion = 0.05;
+          break;
+      }
+    }
+    
+    function resetPositions() {
+      puck.x = TABLE_WIDTH / 2;
+      puck.y = TABLE_HEIGHT / 2;
+      puck.vx = 0;
+      puck.vy = 0;
+      puck.lastX = puck.x;
+      puck.lastY = puck.y;
+      
+      mallet1.x = TABLE_WIDTH / 2;
+      mallet1.y = TABLE_HEIGHT - 180;
+      mallet1.vx = 0;
+      mallet1.vy = 0;
+      mallet1.lastX = mallet1.x;
+      mallet1.lastY = mallet1.y;
+      
+      mallet2.x = TABLE_WIDTH / 2;
+      mallet2.y = 180;
+      mallet2.vx = 0;
+      mallet2.vy = 0;
+      mallet2.lastX = mallet2.x;
+      mallet2.lastY = mallet2.y;
+      
+      aiState.targetX = TABLE_WIDTH / 2;
+      aiState.targetY = 180;
+    }
+    
+    function startGame(mode) {
+      gameMode = mode;
+      gameState = 'playing';
+      document.getElementById('menu-overlay').style.display = 'none';
+      initGame();
+    }
+    
+    function showMenu() {
+      gameState = 'menu';
+      document.getElementById('game-over-overlay').style.display = 'none';
+      document.getElementById('menu-overlay').style.display = 'flex';
+    }
+    
+    function setAILevel(level) {
+      aiLevel = level;
+      document.querySelectorAll('.ai-level-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+    }
+    
+    function updateScoreDisplay() {
+      document.getElementById('score1').textContent = score1;
+      document.getElementById('score2').textContent = score2;
+    }
+    
+    function checkGoal() {
+      const goalLeft = (TABLE_WIDTH - GOAL_WIDTH) / 2;
+      const goalRight = goalLeft + GOAL_WIDTH;
+      
+      // But du joueur 2 (haut)
+      if (puck.y < -PUCK_RADIUS && puck.x > goalLeft && puck.x < goalRight) {
+        score1++;
+        updateScoreDisplay();
+        createGoalEffect(TABLE_WIDTH / 2, 50, '#00d4ff');
+        checkWin();
+        setTimeout(resetPositions, 1500);
+        return true;
+      }
+      
+      // But du joueur 1 (bas)
+      if (puck.y > TABLE_HEIGHT + PUCK_RADIUS && puck.x > goalLeft && puck.x < goalRight) {
+        score2++;
+        updateScoreDisplay();
+        createGoalEffect(TABLE_WIDTH / 2, TABLE_HEIGHT - 50, '#ff2d95');
+        checkWin();
+        setTimeout(resetPositions, 1500);
+        return true;
+      }
+      
+      return false;
+    }
+    
+    function checkWin() {
+      if (score1 >= winningScore || score2 >= winningScore) {
+        gameState = 'gameover';
+        const winnerName = score1 > score2 ? 'Joueur 1' : (gameMode === 'solo' ? 'Ordinateur' : 'Joueur 2');
+        const winnerColor = score1 > score2 ? '#00d4ff' : '#ff2d95';
+        
+        document.getElementById('winner-title').textContent = score1 > score2 ? '🏆 VICTOIRE !' : '😔 DÉFAITE...';
+        document.getElementById('winner-title').style.color = winnerColor;
+        document.getElementById('winner-message').textContent = winnerName + ' gagne la partie !';
+        document.getElementById('game-over-overlay').style.display = 'flex';
+      }
+    }
+    
+    function createCollisionParticles(x, y, color, intensity = 1) {
+      const count = Math.floor(8 * intensity);
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
+        const speed = 3 + Math.random() * 5 * intensity;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color: color,
+          size: 2 + Math.random() * 4
+        });
+      }
+    }
+    
+    function createGoalEffect(x, y, color) {
+      for (let i = 0; i < 50; i++) {
+        const angle = (Math.PI * 2 / 50) * i;
+        const speed = 8 + Math.random() * 12;
+        sparks.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color: color,
+          size: 3 + Math.random() * 5
+        });
+      }
+    }
+    
+    function updateAI() {
+      if (gameMode !== 'solo' || gameState !== 'playing') return;
+      
+      // Prédiction de la position future du palet
+      let predictedX = puck.x;
+      let predictedY = puck.y;
+      
+      if (puck.vy < 0) { // Palet se dirige vers l'IA
+        const timeToReach = (puck.y - 200) / Math.abs(puck.vy);
+        predictedX = puck.x + puck.vx * timeToReach;
+        predictedY = 200;
+        
+        // Limites
+        predictedX = Math.max(MALLET_RADIUS + TABLE_MARGIN, 
+                     Math.min(TABLE_WIDTH - MALLET_RADIUS - TABLE_MARGIN, predictedX));
+      }
+      
+      // Ajouter de la confusion selon le niveau
+      if (Math.random() < aiState.confusion) {
+        predictedX += (Math.random() - 0.5) * 200;
+      }
+      
+      // Réaction progressive
+      aiState.targetX += (predictedX - aiState.targetX) / aiState.reactionTime;
+      
+      // Défense : rester devant le but si le palet s'éloigne
+      if (puck.vy > 0 && puck.y > TABLE_HEIGHT / 2) {
+        aiState.targetX += (TABLE_WIDTH / 2 - aiState.targetX) / 20;
+        aiState.targetY += (180 - aiState.targetY) / 20;
+      } else {
+        // Attaque : approcher si possible
+        const attackY = Math.min(300, Math.max(150, puck.y + 50));
+        aiState.targetY += (attackY - aiState.targetY) / aiState.reactionTime;
+      }
+      
+      // Vitesse de l'IA
+      const aiSpeed = aiLevel === 'hard' ? 9 : (aiLevel === 'medium' ? 7 : 5);
+      
+      // Déplacer le maillet vers la cible
+      const dx = aiState.targetX - mallet2.x;
+      const dy = aiState.targetY - mallet2.y;
+      
+      if (Math.abs(dx) > 2) {
+        mallet2.x += Math.sign(dx) * Math.min(Math.abs(dx), aiSpeed);
+      }
+      if (Math.abs(dy) > 2) {
+        mallet2.y += Math.sign(dy) * Math.min(Math.abs(dy), aiSpeed);
+      }
+      
+      // Contraintes
+      mallet2.x = Math.max(MALLET_RADIUS + TABLE_MARGIN, 
+                   Math.min(TABLE_WIDTH - MALLET_RADIUS - TABLE_MARGIN, mallet2.x));
+      mallet2.y = Math.max(MALLET_RADIUS + TABLE_MARGIN, 
+                   Math.min(TABLE_HEIGHT / 2 - MALLET_RADIUS, mallet2.y));
+      
+      // Calculer la vitesse
+      mallet2.vx = mallet2.x - mallet2.lastX;
+      mallet2.vy = mallet2.y - mallet2.lastY;
+      mallet2.lastX = mallet2.x;
+      mallet2.lastY = mallet2.y;
+    }
+    
+    function updatePhysics() {
+      if (gameState !== 'playing') return;
+      
+      // Sauvegarder les positions précédentes
+      puck.lastX = puck.x;
+      puck.lastY = puck.y;
+      mallet1.lastX = mallet1.x;
+      mallet1.lastY = mallet1.y;
+      
+      // Mouvement du palet
+      puck.x += puck.vx;
+      puck.y += puck.vy;
+      
+      // Friction
+      puck.vx *= FRICTION;
+      puck.vy *= FRICTION;
+      
+      // Limites de vitesse
+      const puckSpeed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy);
+      if (puckSpeed > MAX_PUCK_SPEED) {
+        const scale = MAX_PUCK_SPEED / puckSpeed;
+        puck.vx *= scale;
+        puck.vy *= scale;
+      }
+      
+      // Collisions avec les murs (côtés)
+      const goalLeft = (TABLE_WIDTH - GOAL_WIDTH) / 2;
+      const goalRight = goalLeft + GOAL_WIDTH;
+      
+      // Mur gauche
+      if (puck.x - PUCK_RADIUS < TABLE_MARGIN) {
+        if (puck.y < goalLeft || puck.y > goalRight) {
+          puck.x = TABLE_MARGIN + PUCK_RADIUS;
+          puck.vx = -puck.vx * RESTITUTION;
+          createCollisionParticles(puck.x, puck.y, '#00d4ff', 0.5);
+        }
+      }
+      
+      // Mur droit
+      if (puck.x + PUCK_RADIUS > TABLE_WIDTH - TABLE_MARGIN) {
+        if (puck.y < goalLeft || puck.y > goalRight) {
+          puck.x = TABLE_WIDTH - TABLE_MARGIN - PUCK_RADIUS;
+          puck.vx = -puck.vx * RESTITUTION;
+          createCollisionParticles(puck.x, puck.y, '#00d4ff', 0.5);
+        }
+      }
+      
+      // Collision avec mallet du joueur 1
+      const dx1 = puck.x - mallet1.x;
+      const dy1 = puck.y - mallet1.y;
+      const dist1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+      const minDist1 = PUCK_RADIUS + MALLET_RADIUS;
+      
+      if (dist1 < minDist1) {
+        const angle = Math.atan2(dy1, dx1);
+        const overlap = minDist1 - dist1;
+        
+        // Séparer
+        puck.x += Math.cos(angle) * overlap;
+        puck.y += Math.sin(angle) * overlap;
+        
+        // Calculer le rebond avec conservation de l'énergie
+        const malletSpeed = Math.sqrt(mallet1.vx * mallet1.vx + mallet1.vy * mallet1.vy);
+        const intensity = Math.min(1, (malletSpeed + puckSpeed) / 30);
+        
+        puck.vx = Math.cos(angle) * (Math.abs(puck.vx) + Math.abs(mallet1.vx) * MALLET_RESTITUTION);
+        puck.vy = Math.sin(angle) * (Math.abs(puck.vy) + Math.abs(mallet1.vy) * MALLET_RESTITUTION);
+        
+        // Ajouter un peu d'énergie
+        puck.vx *= 1.05;
+        puck.vy *= 1.05;
+        
+        createCollisionParticles(puck.x, puck.y, '#00d4ff', intensity);
+        impactIntensity = intensity;
+      }
+      
+      // Collision avec mallet du joueur 2
+      const dx2 = puck.x - mallet2.x;
+      const dy2 = puck.y - mallet2.y;
+      const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+      const minDist2 = PUCK_RADIUS + MALLET_RADIUS;
+      
+      if (dist2 < minDist2) {
+        const angle = Math.atan2(dy2, dx2);
+        const overlap = minDist2 - dist2;
+        
+        puck.x += Math.cos(angle) * overlap;
+        puck.y += Math.sin(angle) * overlap;
+        
+        const malletSpeed = Math.sqrt(mallet2.vx * mallet2.vx + mallet2.vy * mallet2.vy);
+        const intensity = Math.min(1, (malletSpeed + puckSpeed) / 30);
+        
+        puck.vx = Math.cos(angle) * (Math.abs(puck.vx) + Math.abs(mallet2.vx) * MALLET_RESTITUTION);
+        puck.vy = Math.sin(angle) * (Math.abs(puck.vy) + Math.abs(mallet2.vy) * MALLET_RESTITUTION);
+        
+        puck.vx *= 1.05;
+        puck.vy *= 1.05;
+        
+        createCollisionParticles(puck.x, puck.y, '#ff2d95', intensity);
+        impactIntensity = intensity;
+      }
+      
+      // Vérifier les buts
+      checkGoal();
+      
+      // Mise à jour de l'IA
+      updateAI();
+      
+      // Mise à jour des particules
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.03;
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      
+      // Mise à jour des étincelles
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        let s = sparks[i];
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.3; // Gravité
+        s.life -= 0.015;
+        if (s.life <= 0) sparks.splice(i, 1);
+      }
+      
+      // Diminution de l'impact
+      impactIntensity *= 0.9;
+    }
+    
+    function drawTable() {
+      // Effet de vibration lors d'un impact
+      const shakeX = (Math.random() - 0.5) * impactIntensity * 5;
+      const shakeY = (Math.random() - 0.5) * impactIntensity * 5;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+      
+      // Fond de la table avec effet de profondeur
+      const tableGrad = ctx.createRadialGradient(
+        TABLE_WIDTH / 2, TABLE_HEIGHT / 2, 100,
+        TABLE_WIDTH / 2, TABLE_HEIGHT / 2, Math.max(TABLE_WIDTH, TABLE_HEIGHT)
+      );
+      tableGrad.addColorStop(0, '#1a2542');
+      tableGrad.addColorStop(0.5, '#0d1428');
+      tableGrad.addColorStop(1, '#050810');
+      ctx.fillStyle = tableGrad;
+      ctx.fillRect(0, 0, TABLE_WIDTH, TABLE_HEIGHT);
+      
+      // Surface glacée réaliste
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.fillRect(TABLE_MARGIN, TABLE_MARGIN, TABLE_WIDTH - TABLE_MARGIN * 2, TABLE_HEIGHT - TABLE_MARGIN * 2);
+      
+      // Lignes de la table
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([]);
+      
+      // Bordures
+      ctx.strokeRect(TABLE_MARGIN, TABLE_MARGIN, TABLE_WIDTH - TABLE_MARGIN * 2, TABLE_HEIGHT - TABLE_MARGIN * 2);
+      
+      // Ligne médiane
+      ctx.beginPath();
+      ctx.moveTo(TABLE_MARGIN, TABLE_HEIGHT / 2);
+      ctx.lineTo(TABLE_WIDTH - TABLE_MARGIN, TABLE_HEIGHT / 2);
+      ctx.stroke();
+      
+      // Cercle central
+      ctx.beginPath();
+      ctx.arc(TABLE_WIDTH / 2, TABLE_HEIGHT / 2, 120, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Cercles de dégagement
+      ctx.beginPath();
+      ctx.arc(TABLE_WIDTH / 2, 250, 80, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(TABLE_WIDTH / 2, TABLE_HEIGHT - 250, 80, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Points
+      const dotPositions = [
+        [TABLE_WIDTH / 2, TABLE_HEIGHT / 2],
+        [TABLE_WIDTH / 2, 250],
+        [TABLE_WIDTH / 2, TABLE_HEIGHT - 250]
+      ];
+      
+      dotPositions.forEach(pos => {
+        ctx.fillStyle = 'rgba(0, 212, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(pos[0], pos[1], 6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      // Buts avec effet néon
+      const goalLeft = (TABLE_WIDTH - GOAL_WIDTH) / 2;
+      const goalRight = goalLeft + GOAL_WIDTH;
+      
+      // But haut
+      const goalGrad1 = ctx.createLinearGradient(goalLeft, 0, goalRight, 0);
+      goalGrad1.addColorStop(0, 'transparent');
+      goalGrad1.addColorStop(0.5, 'rgba(255, 45, 149, 0.3)');
+      goalGrad1.addColorStop(1, 'transparent');
+      ctx.fillStyle = goalGrad1;
+      ctx.fillRect(goalLeft, TABLE_MARGIN - GOAL_DEPTH, GOAL_WIDTH, GOAL_DEPTH);
+      
+      ctx.strokeStyle = 'rgba(255, 45, 149, 0.8)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(goalLeft, TABLE_MARGIN);
+      ctx.lineTo(goalLeft, TABLE_MARGIN - GOAL_DEPTH);
+      ctx.lineTo(goalRight, TABLE_MARGIN - GOAL_DEPTH);
+      ctx.lineTo(goalRight, TABLE_MARGIN);
+      ctx.stroke();
+      
+      // But bas
+      const goalGrad2 = ctx.createLinearGradient(goalLeft, TABLE_HEIGHT, goalRight, TABLE_HEIGHT);
+      goalGrad2.addColorStop(0, 'transparent');
+      goalGrad2.addColorStop(0.5, 'rgba(0, 212, 255, 0.3)');
+      goalGrad2.addColorStop(1, 'transparent');
+      ctx.fillStyle = goalGrad2;
+      ctx.fillRect(goalLeft, TABLE_HEIGHT - TABLE_MARGIN, GOAL_WIDTH, GOAL_DEPTH);
+      
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.8)';
+      ctx.beginPath();
+      ctx.moveTo(goalLeft, TABLE_HEIGHT - TABLE_MARGIN);
+      ctx.lineTo(goalLeft, TABLE_HEIGHT - TABLE_MARGIN + GOAL_DEPTH);
+      ctx.lineTo(goalRight, TABLE_HEIGHT - TABLE_MARGIN + GOAL_DEPTH);
+      ctx.lineTo(goalRight, TABLE_HEIGHT - TABLE_MARGIN);
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+    
+    function drawPuck() {
+      // Ombre du palet
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(puck.x + 5, puck.y + 8, PUCK_RADIUS - 3, PUCK_RADIUS - 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Palet avec effet métallique
+      const puckGrad = ctx.createRadialGradient(
+        puck.x - 5, puck.y - 5, 0,
+        puck.x, puck.y, PUCK_RADIUS
+      );
+      puckGrad.addColorStop(0, '#666');
+      puckGrad.addColorStop(0.3, '#333');
+      puckGrad.addColorStop(0.7, '#111');
+      puckGrad.addColorStop(1, '#000');
+      
+      ctx.fillStyle = puckGrad;
+      ctx.beginPath();
+      ctx.arc(puck.x, puck.y, PUCK_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Bordure lumineuse
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Reflet
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(puck.x - 6, puck.y - 6, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    function drawMallet(mallet, color, isPlayer1) {
+      // Ombre
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.beginPath();
+      ctx.ellipse(mallet.x + 8, mallet.y + 10, MALLET_RADIUS - 5, MALLET_RADIUS - 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Maillet avec effet 3D
+      const malletGrad = ctx.createRadialGradient(
+        mallet.x - 10, mallet.y - 10, 0,
+        mallet.x, mallet.y, MALLET_RADIUS
+      );
+      
+      if (isPlayer1) {
+        malletGrad.addColorStop(0, '#4dd0e1');
+        malletGrad.addColorStop(0.4, '#00acc1');
+        malletGrad.addColorStop(0.8, '#00838f');
+        malletGrad.addColorStop(1, '#006064');
+      } else {
+        malletGrad.addColorStop(0, '#f48fb1');
+        malletGrad.addColorStop(0.4, '#ec407a');
+        malletGrad.addColorStop(0.8, '#c2185b');
+        malletGrad.addColorStop(1, '#880e4f');
+      }
+      
+      ctx.fillStyle = malletGrad;
+      ctx.beginPath();
+      ctx.arc(mallet.x, mallet.y, MALLET_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Bordure néon
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      
+      // Dessus du maillet (plus petit cercle)
+      ctx.fillStyle = isPlayer1 ? 'rgba(0, 212, 255, 0.2)' : 'rgba(255, 45, 149, 0.2)';
+      ctx.beginPath();
+      ctx.arc(mallet.x, mallet.y, MALLET_RADIUS - 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Centre
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.beginPath();
+      ctx.arc(mallet.x, mallet.y, 12, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Reflet
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(mallet.x - 12, mallet.y - 12, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    function drawParticles() {
+      // Particules de collision
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      
+      // Étincelles de but
+      sparks.forEach(s => {
+        ctx.fillStyle = s.color;
+        ctx.globalAlpha = s.life;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+    
+    function draw() {
+      ctx.clearRect(0, 0, TABLE_WIDTH, TABLE_HEIGHT);
+      
+      drawTable();
+      drawMallet(mallet2, '#ff2d95', false);
+      drawMallet(mallet1, '#00d4ff', true);
+      drawPuck();
+      drawParticles();
+    }
+    
+    function gameLoop() {
+      updatePhysics();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Contrôles clavier
+    document.addEventListener('keydown', (e) => {
+      if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = true;
+      }
+      
+      if (e.key === 'p' || e.key === 'P') {
+        if (gameState === 'playing') {
+          gameState = 'paused';
+          document.getElementById('pause-overlay').style.display = 'flex';
+        } else if (gameState === 'paused') {
+          gameState = 'playing';
+          document.getElementById('pause-overlay').style.display = 'none';
+        }
+      }
+      
+      // Déplacer les maillets avec le clavier
+      const moveSpeed = 12;
+      
+      // Joueur 1 (WASD)
+      if (gameState === 'playing') {
+        if (keys.w && mallet1.y > TABLE_HEIGHT / 2 + MALLET_RADIUS) {
+          mallet1.y -= moveSpeed;
+        }
+        if (keys.s && mallet1.y < TABLE_HEIGHT - TABLE_MARGIN - MALLET_RADIUS) {
+          mallet1.y += moveSpeed;
+        }
+        if (keys.a && mallet1.x > TABLE_MARGIN + MALLET_RADIUS) {
+          mallet1.x -= moveSpeed;
+        }
+        if (keys.d && mallet1.x < TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS) {
+          mallet1.x += moveSpeed;
+        }
+        
+        // Joueur 2 (Flèches) - seulement en mode duo
+        if (gameMode === 'duo') {
+          if (keys.ArrowUp && mallet2.y > TABLE_MARGIN + MALLET_RADIUS) {
+            mallet2.y -= moveSpeed;
+          }
+          if (keys.ArrowDown && mallet2.y < TABLE_HEIGHT / 2 - MALLET_RADIUS) {
+            mallet2.y += moveSpeed;
+          }
+          if (keys.ArrowLeft && mallet2.x > TABLE_MARGIN + MALLET_RADIUS) {
+            mallet2.x -= moveSpeed;
+          }
+          if (keys.ArrowRight && mallet2.x < TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS) {
+            mallet2.x += moveSpeed;
+          }
+        }
+      }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+      if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = false;
+      }
+    });
+    
+    // Contrôles souris
+    canvas.addEventListener('mousemove', (e) => {
+      if (gameState !== 'playing') return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      mousePos.x = (e.clientX - rect.left) * scaleX;
+      mousePos.y = (e.clientY - rect.top) * scaleY;
+      
+      // Déterminer quel maillet contrôler selon la position
+      if (mousePos.y > TABLE_HEIGHT / 2) {
+        // Contrôler le maillet du joueur 1
+        mallet1.x = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                    Math.min(TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS, mousePos.x));
+        mallet1.y = Math.max(TABLE_HEIGHT / 2 + MALLET_RADIUS, 
+                    Math.min(TABLE_HEIGHT - TABLE_MARGIN - MALLET_RADIUS, mousePos.y));
+        
+        mallet1.vx = mallet1.x - mallet1.lastX;
+        mallet1.vy = mallet1.y - mallet1.lastY;
+        mallet1.lastX = mallet1.x;
+        mallet1.lastY = mallet1.y;
+      } else if (gameMode === 'duo') {
+        // En mode duo, la souris peut aussi contrôler le joueur 2
+        mallet2.x = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                    Math.min(TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS, mousePos.x));
+        mallet2.y = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                    Math.min(TABLE_HEIGHT / 2 - MALLET_RADIUS, mousePos.y));
+        
+        mallet2.vx = mallet2.x - mallet2.lastX;
+        mallet2.vy = mallet2.y - mallet2.lastY;
+        mallet2.lastX = mallet2.x;
+        mallet2.lastY = mallet2.y;
+      }
+    });
+    
+    // Contrôles tactiles
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    canvas.addEventListener('touchmove', handleTouch, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    function handleTouch(e) {
+      e.preventDefault();
+      if (gameState !== 'playing') return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        const touchX = (touch.clientX - rect.left) * scaleX;
+        const touchY = (touch.clientY - rect.top) * scaleY;
+        
+        if (touchY > TABLE_HEIGHT / 2) {
+          mallet1.x = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                      Math.min(TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS, touchX));
+          mallet1.y = Math.max(TABLE_HEIGHT / 2 + MALLET_RADIUS, 
+                      Math.min(TABLE_HEIGHT - TABLE_MARGIN - MALLET_RADIUS, touchY));
+          
+          mallet1.vx = mallet1.x - mallet1.lastX;
+          mallet1.vy = mallet1.y - mallet1.lastY;
+          mallet1.lastX = mallet1.x;
+          mallet1.lastY = mallet1.y;
+        } else if (gameMode === 'duo') {
+          mallet2.x = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                      Math.min(TABLE_WIDTH - TABLE_MARGIN - MALLET_RADIUS, touchX));
+          mallet2.y = Math.max(TABLE_MARGIN + MALLET_RADIUS, 
+                      Math.min(TABLE_HEIGHT / 2 - MALLET_RADIUS, touchY));
+          
+          mallet2.vx = mallet2.x - mallet2.lastX;
+          mallet2.vy = mallet2.y - mallet2.lastY;
+          mallet2.lastX = mallet2.x;
+          mallet2.lastY = mallet2.y;
+        }
+      }
+    }
+    
+    function handleTouchEnd(e) {
+      e.preventDefault();
+    }
+    
+    // Montrer les niveaux d'IA quand on sélectionne solo
+    document.querySelector('.mode-btn.solo').addEventListener('click', () => {
+      document.getElementById('ai-selector').style.display = 'flex';
+    });
+    
+    document.querySelector('.mode-btn.duo').addEventListener('click', () => {
+      document.getElementById('ai-selector').style.display = 'none';
+    });
+    
+    // Démarrer la boucle de jeu
+    gameLoop();
+  </script>
+</body>
+</html>

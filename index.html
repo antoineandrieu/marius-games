@@ -199,6 +199,12 @@
       animation: borderGlow 3s linear infinite;
     }
     
+    .game-card.airhockey::after {
+      background: linear-gradient(90deg, #00d4ff, #ff2d95, #00d4ff);
+      background-size: 200% 100%;
+      animation: borderGlow 3s linear infinite;
+    }
+    
     @keyframes borderGlow {
       0% { background-position: 0% 50%; }
       100% { background-position: 200% 50%; }
@@ -253,6 +259,19 @@
       animation: pulseGlow 3s ease-in-out infinite;
     }
     
+    .airhockey .game-visual {
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(255, 45, 149, 0.2) 100%);
+    }
+    
+    .airhockey .game-visual::before {
+      content: '';
+      position: absolute;
+      width: 150%;
+      height: 150%;
+      background: radial-gradient(circle, rgba(0, 212, 255, 0.3) 0%, transparent 70%);
+      animation: pulseGlow 3s ease-in-out infinite;
+    }
+    
     @keyframes pulseGlow {
       0%, 100% { transform: scale(1); opacity: 0.5; }
       50% { transform: scale(1.2); opacity: 0.8; }
@@ -294,6 +313,11 @@
     .skiclub .game-title {
       color: #4A90E2;
       text-shadow: 0 0 30px rgba(74, 144, 226, 0.8);
+    }
+    
+    .airhockey .game-title {
+      color: #00d4ff;
+      text-shadow: 0 0 30px rgba(0, 212, 255, 0.8);
     }
     
     .game-description {
@@ -354,6 +378,24 @@
       transform: scale(1.05);
     }
     
+    .airhockey .play-button {
+      color: #00d4ff;
+      border-color: #00d4ff;
+      box-shadow: 
+        0 0 20px rgba(0, 212, 255, 0.3),
+        inset 0 0 20px rgba(0, 212, 255, 0.1);
+    }
+    
+    .airhockey .play-button:hover {
+      background: linear-gradient(135deg, #00d4ff, #ff2d95);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 
+        0 0 40px rgba(0, 212, 255, 0.6),
+        inset 0 0 20px rgba(255, 255, 255, 0.2);
+      transform: scale(1.05);
+    }
+    
     /* Responsive */
     @media (max-width: 768px) {
       h1 {
@@ -407,6 +449,19 @@
         <div class="game-title">SKICLUB</div>
         <div class="game-description">
           Descendez les pistes enneigées et slalomez entre les portes dans ce jeu de ski alpin aux couleurs des JO d'hiver.
+        </div>
+        <div class="play-button">▶ Jouer</div>
+      </div>
+    </a>
+    
+    <a href="airhockey/index.html" class="game-card airhockey">
+      <div class="game-visual">
+        <span class="game-emoji">🏒</span>
+      </div>
+      <div class="game-content">
+        <div class="game-title">AIR HOCKEY</div>
+        <div class="game-description">
+          Le hockey sur air comme dans la vraie vie ! Solo vs IA ou à deux joueurs. Souris, tactile ou clavier.
         </div>
         <div class="play-button">▶ Jouer</div>
       </div>
