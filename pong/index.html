@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pong</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0d0221 0%, #1a0a2e 50%, #0d0221 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #canvas {
+      display: block;
+      border-radius: 8px;
+      border: 2px solid rgba(0, 245, 255, 0.3);
+      box-shadow:
+        0 0 30px rgba(0, 245, 255, 0.15),
+        0 0 60px rgba(255, 0, 170, 0.1),
+        inset 0 0 60px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <script>
+    (function () {
+      const WIDTH = 800;
+      const HEIGHT = 600;
+      const WINNING_SCORE = 10;
+      const PADDLE_WIDTH = 12;
+      const PADDLE_HEIGHT = 80;
+      const PADDLE_SPEED = 8;
+      const PADDLE_MARGIN = 30;
+      const BALL_SIZE = 12;
+      const BALL_SPEED_INIT = 3;
+      const BALL_SPEED_MAX = 14;
+      const BALL_SPEED_INCREASE = 1.025;
+      const AI_SPEED = 5.5;
+
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const keys = { p1_up: false, p1_down: false, p2_up: false, p2_down: false };
+
+      let paddleLeft = { x: PADDLE_MARGIN, y: (HEIGHT - PADDLE_HEIGHT) / 2, w: PADDLE_WIDTH, h: PADDLE_HEIGHT };
+      let paddleRight = { x: WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, y: (HEIGHT - PADDLE_HEIGHT) / 2, w: PADDLE_WIDTH, h: PADDLE_HEIGHT };
+      let ball = { x: (WIDTH - BALL_SIZE) / 2, y: (HEIGHT - BALL_SIZE) / 2, w: BALL_SIZE, h: BALL_SIZE };
+      let vx = BALL_SPEED_INIT;
+      let vy = 0;
+      let currentBallSpeed = BALL_SPEED_INIT;
+      let scoreLeft = 0;
+      let scoreRight = 0;
+      let gameOver = false;
+      let winner = null;
+      let gameState = 'menu';
+      let soloMode = false;
+      let gamePaused = false;
+
+      const COLOR_LEFT = '#00f5ff';
+      const COLOR_RIGHT = '#ff00aa';
+      const COLOR_BALL = '#ffdd00';
+      const COLOR_CENTER_1 = 'rgba(0, 245, 255, 0.7)';
+      const COLOR_CENTER_2 = 'rgba(255, 0, 170, 0.7)';
+
+      function initRound() {
+        currentBallSpeed = BALL_SPEED_INIT;
+        paddleLeft.y = (HEIGHT - PADDLE_HEIGHT) / 2;
+        paddleRight.y = (HEIGHT - PADDLE_HEIGHT) / 2;
+        ball.x = (WIDTH - BALL_SIZE) / 2;
+        ball.y = (HEIGHT - BALL_SIZE) / 2;
+        const angle = (Math.random() - 0.5) * 0.5;
+        vx = Math.random() > 0.5 ? currentBallSpeed : -currentBallSpeed;
+        vy = currentBallSpeed * angle;
+      }
+
+      function resetBall() {
+        ball.x = (WIDTH - BALL_SIZE) / 2;
+        ball.y = (HEIGHT - BALL_SIZE) / 2;
+        const angle = (Math.random() - 0.5) * 0.5;
+        vx = Math.random() > 0.5 ? currentBallSpeed : -currentBallSpeed;
+        vy = currentBallSpeed * angle;
+      }
+
+      function rectOverlap(a, b) {
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+
+      function updateAI() {
+        const ballCenterY = ball.y + BALL_SIZE / 2;
+        const paddleCenterY = paddleRight.y + PADDLE_HEIGHT / 2;
+        if (vx > 0) {
+          const diff = ballCenterY - paddleCenterY;
+          if (Math.abs(diff) > 4) {
+            const dir = diff > 0 ? 1 : -1;
+            paddleRight.y += dir * AI_SPEED;
+          }
+        }
+        paddleRight.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, paddleRight.y));
+      }
+
+      function update() {
+        if (gameState === 'menu') return;
+        if (gameOver) return;
+        if (gamePaused) return;
+
+        if (keys.p1_up && paddleLeft.y > 0) paddleLeft.y -= PADDLE_SPEED;
+        if (keys.p1_down && paddleLeft.y + PADDLE_HEIGHT < HEIGHT) paddleLeft.y += PADDLE_SPEED;
+        if (soloMode) {
+          updateAI();
+        } else {
+          if (keys.p2_up && paddleRight.y > 0) paddleRight.y -= PADDLE_SPEED;
+          if (keys.p2_down && paddleRight.y + PADDLE_HEIGHT < HEIGHT) paddleRight.y += PADDLE_SPEED;
+        }
+
+        ball.x += vx;
+        ball.y += vy;
+
+        if (ball.y <= 0) { ball.y = 0; vy = -vy; }
+        if (ball.y + BALL_SIZE >= HEIGHT) { ball.y = HEIGHT - BALL_SIZE; vy = -vy; }
+
+        if (rectOverlap(ball, paddleLeft) && vx < 0) {
+          ball.x = paddleLeft.x + paddleLeft.w;
+          vx = -vx;
+          const hit = (ball.y + BALL_SIZE / 2 - (paddleLeft.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
+          vy += hit * 2;
+          currentBallSpeed = Math.min(BALL_SPEED_MAX, currentBallSpeed * BALL_SPEED_INCREASE);
+          const mag = Math.sqrt(vx * vx + vy * vy) || 1;
+          vx = (vx / mag) * currentBallSpeed;
+          vy = (vy / mag) * currentBallSpeed;
+        }
+        if (rectOverlap(ball, paddleRight) && vx > 0) {
+          ball.x = paddleRight.x - BALL_SIZE;
+          vx = -vx;
+          const hit = (ball.y + BALL_SIZE / 2 - (paddleRight.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
+          vy += hit * 2;
+          currentBallSpeed = Math.min(BALL_SPEED_MAX, currentBallSpeed * BALL_SPEED_INCREASE);
+          const mag = Math.sqrt(vx * vx + vy * vy) || 1;
+          vx = (vx / mag) * currentBallSpeed;
+          vy = (vy / mag) * currentBallSpeed;
+        }
+
+        if (ball.x + BALL_SIZE <= 0) {
+          scoreRight++;
+          resetBall();
+        }
+        if (ball.x >= WIDTH) {
+          scoreLeft++;
+          resetBall();
+        }
+
+        if (scoreLeft >= WINNING_SCORE && scoreLeft - scoreRight >= 2) {
+          gameOver = true;
+          winner = soloMode ? 'Vous' : 'Joueur 1';
+        } else if (scoreRight >= WINNING_SCORE && scoreRight - scoreLeft >= 2) {
+          gameOver = true;
+          winner = soloMode ? 'Ordinateur' : 'Joueur 2';
+        }
+      }
+
+      function draw() {
+        const bg = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+        bg.addColorStop(0, '#0d0221');
+        bg.addColorStop(0.5, '#1a0a2e');
+        bg.addColorStop(1, '#0d0221');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        if (gameState === 'menu') {
+          canvas.style.cursor = 'pointer';
+          ctx.fillStyle = COLOR_LEFT;
+          ctx.font = '56px "Courier New", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('PONG', WIDTH / 2, HEIGHT / 2 - 80);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.font = '28px "Courier New", monospace';
+          ctx.fillText('1  –  Solo (vs ordinateur)', WIDTH / 2, HEIGHT / 2);
+          ctx.fillText('2  –  Deux joueurs', WIDTH / 2, HEIGHT / 2 + 44);
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = '22px "Courier New", monospace';
+          ctx.fillText('Cliquez ou appuyez sur 1 ou 2', WIDTH / 2, HEIGHT / 2 + 100);
+          return;
+        }
+        canvas.style.cursor = 'default';
+
+        const borderGrad = ctx.createLinearGradient(0, 0, WIDTH, 0);
+        borderGrad.addColorStop(0, COLOR_LEFT);
+        borderGrad.addColorStop(0.5, '#fff');
+        borderGrad.addColorStop(1, COLOR_RIGHT);
+        ctx.strokeStyle = borderGrad;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, WIDTH - 2, HEIGHT - 2);
+
+        const segHeight = 24;
+        const segGap = 18;
+        const cx = WIDTH / 2;
+        const halfW = 3;
+        let segIndex = 0;
+        for (let y = 0; y < HEIGHT; y += segHeight + segGap) {
+          ctx.fillStyle = segIndex % 2 === 0 ? COLOR_CENTER_1 : COLOR_CENTER_2;
+          ctx.fillRect(cx - halfW, y, halfW * 2, segHeight);
+          segIndex++;
+        }
+
+        if (!gameOver) {
+          ctx.shadowBlur = 16;
+          ctx.fillStyle = COLOR_LEFT;
+          ctx.shadowColor = COLOR_LEFT;
+          ctx.fillRect(paddleLeft.x, paddleLeft.y, paddleLeft.w, paddleLeft.h);
+          ctx.fillStyle = COLOR_RIGHT;
+          ctx.shadowColor = COLOR_RIGHT;
+          ctx.fillRect(paddleRight.x, paddleRight.y, paddleRight.w, paddleRight.h);
+          ctx.fillStyle = COLOR_BALL;
+          ctx.shadowColor = COLOR_BALL;
+          ctx.beginPath();
+          ctx.ellipse(ball.x + BALL_SIZE / 2, ball.y + BALL_SIZE / 2, BALL_SIZE / 2, BALL_SIZE / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.shadowColor = 'transparent';
+        }
+
+        ctx.font = '48px "Courier New", monospace';
+        const scoreText = scoreLeft + '  –  ' + scoreRight;
+        const tw = ctx.measureText(scoreText).width;
+        const sx = (WIDTH - tw) / 2;
+        ctx.fillStyle = COLOR_LEFT;
+        ctx.fillText(String(scoreLeft), sx, 48);
+        const w1 = ctx.measureText(String(scoreLeft)).width;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText('  –  ', sx + w1, 48);
+        const w2 = ctx.measureText('  –  ').width;
+        ctx.fillStyle = COLOR_RIGHT;
+        ctx.fillText(String(scoreRight), sx + w1 + w2, 48);
+
+        if (gameOver && winner) {
+          const isLeft = winner === 'Joueur 1' || winner === 'Vous';
+          ctx.fillStyle = isLeft ? COLOR_LEFT : COLOR_RIGHT;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = isLeft ? COLOR_LEFT : COLOR_RIGHT;
+          ctx.font = '72px "Courier New", monospace';
+          ctx.fillText(winner + ' gagne !', WIDTH / 2, HEIGHT / 2);
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.font = '32px "Courier New", monospace';
+          ctx.fillText('Espace pour rejouer', WIDTH / 2, HEIGHT / 2 + 50);
+          ctx.fillText('Échap pour le menu', WIDTH / 2, HEIGHT / 2 + 86);
+        }
+
+        if (gamePaused) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(0, 0, WIDTH, HEIGHT);
+          ctx.fillStyle = '#fff';
+          ctx.font = '64px "Courier New", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('Pause', WIDTH / 2, HEIGHT / 2 - 20);
+          ctx.font = '28px "Courier New", monospace';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillText('P pour reprendre', WIDTH / 2, HEIGHT / 2 + 40);
+        }
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      document.addEventListener('keydown', function (e) {
+        if (gameState === 'menu') {
+          if (e.key === '1') { soloMode = true; gameState = 'play'; initRound(); e.preventDefault(); }
+          if (e.key === '2') { soloMode = false; gameState = 'play'; initRound(); e.preventDefault(); }
+          return;
+        }
+        if (e.key === 'p' || e.key === 'P') {
+          if (gameState === 'play' && !gameOver) {
+            gamePaused = !gamePaused;
+            e.preventDefault();
+          }
+        }
+        if (e.key === 'z') keys.p1_up = true;
+        if (e.key === 's') keys.p1_down = true;
+        if (e.key === 'ArrowUp') { keys.p2_up = true; e.preventDefault(); }
+        if (e.key === 'ArrowDown') { keys.p2_down = true; e.preventDefault(); }
+        if (gameOver && e.key === ' ') {
+          e.preventDefault();
+          gameOver = false;
+          gamePaused = false;
+          winner = null;
+          scoreLeft = 0;
+          scoreRight = 0;
+          initRound();
+        }
+        if (gameOver && e.key === 'Escape') {
+          e.preventDefault();
+          gameState = 'menu';
+          gameOver = false;
+          gamePaused = false;
+          winner = null;
+          scoreLeft = 0;
+          scoreRight = 0;
+        }
+      });
+
+      document.addEventListener('keyup', function (e) {
+        if (e.key === 'z') keys.p1_up = false;
+        if (e.key === 's') keys.p1_down = false;
+        if (e.key === 'ArrowUp') keys.p2_up = false;
+        if (e.key === 'ArrowDown') keys.p2_down = false;
+      });
+
+      canvas.addEventListener('click', function (e) {
+        if (gameState !== 'menu') return;
+        const rect = canvas.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * WIDTH;
+        const y = ((e.clientY - rect.top) / rect.height) * HEIGHT;
+        const opt1Top = HEIGHT / 2 - 18;
+        const opt1Bottom = HEIGHT / 2 + 22;
+        const opt2Top = HEIGHT / 2 + 26;
+        const opt2Bottom = HEIGHT / 2 + 66;
+        if (y >= opt1Top && y <= opt1Bottom && x > WIDTH / 2 - 180 && x < WIDTH / 2 + 180) {
+          soloMode = true; gameState = 'play'; initRound();
+        } else if (y >= opt2Top && y <= opt2Bottom && x > WIDTH / 2 - 180 && x < WIDTH / 2 + 180) {
+          soloMode = false; gameState = 'play'; initRound();
+        }
+      });
+
+      loop();
+    })();
+  </script>
+</body>
+</html>

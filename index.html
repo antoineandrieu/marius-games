@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeux</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0d0221 0%, #1a0a2e 50%, #0d0221 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      font-family: "Courier New", monospace;
+    }
+    h1 {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+      text-shadow: 0 0 20px rgba(0, 245, 255, 0.4);
+    }
+    .games {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      justify-content: center;
+    }
+    .game-link {
+      display: block;
+      padding: 1.5rem 2rem;
+      min-width: 180px;
+      text-align: center;
+      text-decoration: none;
+      color: #fff;
+      font-size: 1.25rem;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    }
+    .game-link:hover {
+      border-color: rgba(0, 245, 255, 0.6);
+      box-shadow: 0 0 24px rgba(0, 245, 255, 0.2);
+      transform: translateY(-2px);
+    }
+    .game-link.pong {
+      border-color: rgba(0, 245, 255, 0.4);
+      color: #00f5ff;
+    }
+    .game-link.pong:hover {
+      border-color: #00f5ff;
+      box-shadow: 0 0 30px rgba(0, 245, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <h1>Jeux</h1>
+  <nav class="games">
+    <a href="pong/index.html" class="game-link pong">Pong</a>
+  </nav>
+</body>
+</html>
