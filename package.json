@@ -1,0 +1,31 @@
+{
+  "name": "marius-games",
+  "version": "1.0.0",
+  "description": "Jeu Pong dans le navigateur (solo ou deux joueurs).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/antoineandrieu/pong.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/antoineandrieu/pong/issues"
+  },
+  "homepage": "https://github.com/antoineandrieu/pong#readme",
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.8"
+  }
+}
