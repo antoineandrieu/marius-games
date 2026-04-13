@@ -1,0 +1,16 @@
+[build]
+# Use Node.js 20.x LTS
+nodejsVersion = "20"
+
+# Install dependencies
+npmInstall = true
+
+# Build the application
+buildCommand = "npm run build"
+
+# Output directory
+outputDirectory = "dist"
+
+[deploy]
+# Use a lightweight web server
+webserver = "caddy"
