@@ -1,6 +1,6 @@
 [build]
-# Use Node.js 20.x LTS
-nodejsVersion = "20"
+# Use Node.js 20.x LTS - specific version to avoid compatibility issues
+nodejsVersion = "20.19.0"
 
 # Install dependencies
 npmInstall = true
